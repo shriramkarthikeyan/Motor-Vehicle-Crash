@@ -1,0 +1,230 @@
+---
+title: "MVC_Mass"
+author: "Shriram Karthikeyan"
+date: "November 8, 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Delete the column TRVL_DIRC_DESCR from the 2019 and 2019 file
+Replace the first row for all the csv files below from the file Data/MassDOT_IMPACT_Template_Fields_Person.csv
+```{r}
+PLCD_2019 <- read.csv("Data/2019_Person_Level_Crash_Details_.csv", stringsAsFactors=FALSE)
+PLCD_2018 <- read.csv("Data/2018_Person_Level_Crash_Details_.csv", stringsAsFactors=FALSE)
+PLCD_2017 <- read.csv("Data/2017_Person_Level_Crash_Details_.csv", stringsAsFactors=FALSE)
+PLCD_2016 <- read.csv("Data/2016_Person_Level Crash_Details .csv", stringsAsFactors=FALSE)
+PLCD_2015 <- read.csv("Data/2015_Person_Level_Crash_Details_.csv", stringsAsFactors=FALSE)
+#PLCD_2014 <- read.csv("Data/2014_Person_Level_Crash_Details_.csv", stringsAsFactors=FALSE)
+
+```
+
+
+```{r}
+# PLCD_2019 <- PLCD_2019[ , -which(names(PLCD_2019) %in% c("TRVL_DIRC_DESCR"))]
+# PLCD_2018 <- PLCD_2018[ , -which(names(PLCD_2018) %in% c("TRVL_DIRC_DESCR"))]
+
+```
+
+
+```{r}
+PLCD<- rbind(PLCD_2015,PLCD_2016,PLCD_2017,PLCD_2018,PLCD_2019)
+#rm(PLCD_2014)
+rm(PLCD_2015)
+rm(PLCD_2016)
+rm(PLCD_2017)
+rm(PLCD_2018)
+rm(PLCD_2019)
+```
+
+
+
+add libraries
+```{r}
+library(dplyr)
+library(magrittr)
+library(stringr)
+library(lubridate)
+library(ggplot2)
+library(tidyr)
+```
+
+```{r}
+#summary(PLCD)
+na_count<-sapply(PLCD, function(x) sum(is.na(x)))
+sort(na_count,decreasing = TRUE)
+```
+
+
+
+
+```{r}
+
+
+
+PLCD <- PLCD[ , -which(names(PLCD) %in% c("AADT_Station_Number.linked_RD","Milemarker","Opposing_Direction_Speed_Limit.linked_RD","Undivided_Left_Shoulder_Width.linked_RD","Number_of_Peak_Hour_Lanes.linked_RD","AADT_Derivation.linked_RD","Undivided_Left_Shoulder_Type.linked_RD","Truck_Exclusion_Type.linked_RD","Truck_Exclusion_Time.linked_RD","Left_Shoulder_Width.linked_RD ","Median_Width.linked_RD","Vehicle_Sequence_of_Events_.All_Vehicles.","Vehicle_Travel_Direction_.All_Vehicles.","Distance_and_Direction_from_Intersection","Distance_and_Direction_from_Milemarker","Vehicle_Configuration_.All_Vehicles.","RPA","Is_Geocoded","Geocoding_Method","Vehicle_Owner_City_Town"))]
+
+#write.csv(PLCD,'PLCD.csv')
+
+```
+
+
+
+```{r}
+summary(PLCD$Driver_Age)
+hist(PLCD$Driver_Age,nclass = 100)
+
+
+PLCD$DRIVER_DISTRACTED_TYPE_DESCR
+  
+# PLCD %>%
+#   #select(DRIVER_AGE)%>%
+#   filter(DRIVER_AGE<5)
+```
+
+
+Fatal injury analysis:
+where did people die and how many?
+what was the time of the fatal injuries?
+what was the age distribution of the fatal injuries
+```{r}
+# PLCD%>%
+#   filter(NUMB_FATAL_INJR>0)
+```
+
+
+
+What is the trend of crashes affected by Road Surface Condition
+```{r}
+
+
+PLCD$Crash_Date_YMD<- ymd(substr(PLCD$Crash_Date,1,10))
+months(PLCD$Crash_Date_YMD)
+
+PLCD$Crash_Date_YM<- format(PLCD$Crash_Date_YMD,"%Y %B")
+
+
+RSC <- as.data.frame(
+  PLCD%>%
+    filter(!is.na(Crash_Date_YM)) %>%
+    group_by(Crash_Date_YMD,Road_Surface_Condition) %>%
+    summarise(Number_of_Crashes = n())
+                     )
+
+#write.csv(RSC,"RSC.csv")
+
+
+
+ggplot(RSC,aes(x=RSC$Crash_Date_YMD,y=RSC$Number_of_Crashes))+geom_line(aes(color=Road_Surface_Condition),alpha=0.8)+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+#dev.new()
+```
+
+
+
+```{r}
+
+unique(PLCD$Traffic_Control_Device_Functioning)
+
+year(PLCD$Crash_Date_YMD)
+
+
+PLCD%>%
+  group_by(County_Name)%>%
+  filter(Traffic_Control_Device_Fnuctioning=="No, device not functioning" & year(Crash_Date_YMD)==2019)%>%
+  summarise(ct =n())
+
+PLCD%>%
+  group_by(County_Name)%>%
+  filter(Traffic_Control_Device_Functioning=="No, device not functioning" & year(Crash_Date_YMD)==2019)%>%
+  summarise(ct = n())
+
+```
+
+
+
+```{r}
+
+#Import County Wise Population
+County_Pop <- read.csv("County_Year_Pop_Mass.csv")
+County_Pop <- gather(County_Pop, key = "Year", value = "Population" ,  2:5)
+County_Pop$Year<- as.numeric(str_replace(County_Year_Pop_Mass$Year,"X",""))
+
+#importing 2019 population
+Mass_Counties_Pop_2019 <- read.csv("Mass_Counties_Pop_2019.csv")
+County_Pop<-rbind(County_Pop,Mass_Counties_Pop_2019)
+rm(Mass_Counties_Pop_2019)
+
+
+############################
+#Total Number of Crashes
+score_df<-PLCD%>%
+  group_by(County_Name,Crash_Year)%>%
+  summarise(Number_of_Crashes =n())
+
+colnames(score_df)[colnames(score_df)=="County_Name"] <- "County"
+colnames(score_df)[colnames(score_df)=="Crash_Year"] <- "Year"
+Crash_Percentage_Vs_Pop <- inner_join(County_Pop,score_df)
+
+Crash_Percentage_Vs_Pop$Crash_Percentage<-Crash_Percentage_Vs_Pop$Number_of_Crashes/Crash_Percentage_Vs_Pop$Population
+
+County_Crash_Percentage <-
+  Crash_Percentage_Vs_Pop %>%
+  group_by(County) %>%
+  summarise(Crash_Percentage = mean(Crash_Percentage))
+
+
+#median(County_Crash_Percentage$Crash_Percentage)
+
+
+County_Crash_Percentage$Mean_Crash_Percent <- mean(County_Crash_Percentage$Crash_Percentage)
+
+County_Crash_Percentage$Crash_Score <- County_Crash_Percentage$Crash_Percentage/County_Crash_Percentage$Mean_Crash_Percent
+
+
+
+
+#Traffic Device Functioning
+TCDNF_score_df<-PLCD%>%
+  filter(Traffic_Control_Device_Functioning == "No, device not functioning")%>%
+  group_by(County_Name,Crash_Year)%>%
+  summarise(TCDNF_Number_of_Crashes =n())
+
+
+colnames(TCDNF_score_df)[colnames(TCDNF_score_df)=="County_Name"] <- "County"
+colnames(TCDNF_score_df)[colnames(TCDNF_score_df)=="Crash_Year"] <- "Year"
+Crash_Percentage_Vs_Pop <- inner_join(County_Pop,TCDNF_score_df)
+
+#checking PLCD for NA in Crash_Year
+PLCD%>%
+  filter(is.na(Crash_Year))
+
+Crash_Percentage_Vs_Pop$Crash_Percentage<-Crash_Percentage_Vs_Pop$Number_of_Crashes/Crash_Percentage_Vs_Pop$Population
+
+County_Crash_Percentage <-
+  Crash_Percentage_Vs_Pop %>%
+  group_by(County) %>%
+  summarise(Crash_Percentage = mean(Crash_Percentage))
+
+
+#median(County_Crash_Percentage$Crash_Percentage)
+
+
+County_Crash_Percentage$Mean_Crash_Percent <- mean(County_Crash_Percentage$Crash_Percentage)
+
+County_Crash_Percentage$Crash_Score <- County_Crash_Percentage$Crash_Percentage/County_Crash_Percentage$Mean_Crash_Percent
+
+
+#Protective System Used
+
+#Alcohol Suspected
+
+#Drugs Suspected
+
+
+
+
+```
+
