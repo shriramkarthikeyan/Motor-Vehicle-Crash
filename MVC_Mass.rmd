@@ -1,0 +1,342 @@
+---
+title: "MVC_Mass"
+author: "Shriram Karthikeyan"
+date: "November 8, 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Delete the column TRVL_DIRC_DESCR from the 2019 and 2019 file
+Replace the first row for all the csv files below from the file Data/MassDOT_IMPACT_Template_Fields_Person.csv
+```{r}
+PLCD_2019 <- read.csv("Data/2019_Person_Level_Crash_Details_.csv", stringsAsFactors=FALSE)
+PLCD_2018 <- read.csv("Data/2018_Person_Level_Crash_Details_.csv", stringsAsFactors=FALSE)
+PLCD_2017 <- read.csv("Data/2017_Person_Level_Crash_Details_.csv", stringsAsFactors=FALSE)
+PLCD_2016 <- read.csv("Data/2016_Person_Level Crash_Details .csv", stringsAsFactors=FALSE)
+PLCD_2015 <- read.csv("Data/2015_Person_Level_Crash_Details_.csv", stringsAsFactors=FALSE)
+#PLCD_2014 <- read.csv("Data/2014_Person_Level_Crash_Details_.csv", stringsAsFactors=FALSE)
+
+```
+
+
+```{r}
+# PLCD_2019 <- PLCD_2019[ , -which(names(PLCD_2019) %in% c("TRVL_DIRC_DESCR"))]
+# PLCD_2018 <- PLCD_2018[ , -which(names(PLCD_2018) %in% c("TRVL_DIRC_DESCR"))]
+
+```
+
+
+```{r}
+PLCD<- rbind(PLCD_2015,PLCD_2016,PLCD_2017,PLCD_2018,PLCD_2019)
+#rm(PLCD_2014)
+rm(PLCD_2015)
+rm(PLCD_2016)
+rm(PLCD_2017)
+rm(PLCD_2018)
+rm(PLCD_2019)
+```
+
+
+
+add libraries
+```{r}
+library(dplyr)
+library(magrittr)
+library(stringr)
+library(lubridate)
+library(ggplot2)
+library(tidyr)
+#install.packages("scales")
+#library(scales)
+```
+
+```{r}
+#summary(PLCD)
+na_count<-sapply(PLCD, function(x) sum(is.na(x)))
+sort(na_count,decreasing = TRUE)
+```
+
+
+
+
+```{r}
+
+
+
+PLCD <- PLCD[ , -which(names(PLCD) %in% c("AADT_Station_Number.linked_RD","Milemarker","Opposing_Direction_Speed_Limit.linked_RD","Undivided_Left_Shoulder_Width.linked_RD","Number_of_Peak_Hour_Lanes.linked_RD","AADT_Derivation.linked_RD","Undivided_Left_Shoulder_Type.linked_RD","Truck_Exclusion_Type.linked_RD","Truck_Exclusion_Time.linked_RD","Left_Shoulder_Width.linked_RD ","Median_Width.linked_RD","Vehicle_Sequence_of_Events_.All_Vehicles.","Vehicle_Travel_Direction_.All_Vehicles.","Distance_and_Direction_from_Intersection","Distance_and_Direction_from_Milemarker","Vehicle_Configuration_.All_Vehicles.","RPA","Is_Geocoded","Geocoding_Method","Vehicle_Owner_City_Town"))]
+
+#write.csv(PLCD,'PLCD.csv')
+
+```
+
+
+
+```{r}
+summary(PLCD$Driver_Age)
+hist(PLCD$Driver_Age,nclass = 100)
+
+
+PLCD$DRIVER_DISTRACTED_TYPE_DESCR
+  
+# PLCD %>%
+#   #select(DRIVER_AGE)%>%
+#   filter(DRIVER_AGE<5)
+```
+
+
+Fatal injury analysis:
+where did people die and how many?
+what was the time of the fatal injuries?
+what was the age distribution of the fatal injuries
+```{r}
+# PLCD%>%
+#   filter(NUMB_FATAL_INJR>0)
+```
+
+
+
+```{r}
+
+#Import County Wise Population
+County_Pop <- read.csv("Data/County_Year_Pop_Mass.csv")
+County_Pop <- gather(County_Pop, key = "Year", value = "Population" ,  2:5)
+County_Pop$Year<- as.numeric(str_replace(County_Pop$Year,"X",""))
+
+#importing 2019 population
+Mass_Counties_Pop_2019 <- read.csv("Data/Mass_Counties_Pop_2019.csv")
+County_Pop<-rbind(County_Pop,Mass_Counties_Pop_2019)
+rm(Mass_Counties_Pop_2019)
+
+
+############################
+#Total Number of Crashes
+score_df<-PLCD%>%
+  group_by(County_Name,Crash_Year)%>%
+  summarise(Number_of_Crashes =n())
+
+colnames(score_df)[colnames(score_df)=="County_Name"] <- "County"
+colnames(score_df)[colnames(score_df)=="Crash_Year"] <- "Year"
+Crash_Percentage_Vs_Pop <- inner_join(County_Pop,score_df)
+
+Crash_Percentage_Vs_Pop$Crash_Percentage<-Crash_Percentage_Vs_Pop$Number_of_Crashes/Crash_Percentage_Vs_Pop$Population
+
+County_Crash_Percentage <-
+  Crash_Percentage_Vs_Pop %>%
+  group_by(County) %>%
+  summarise(Crash_Percentage = mean(Crash_Percentage))
+
+
+
+County_Crash_Percentage$Mean_Crash_Percent <- mean(County_Crash_Percentage$Crash_Percentage)
+
+County_Crash_Percentage$Total_Crash_Score <- County_Crash_Percentage$Crash_Percentage/County_Crash_Percentage$Mean_Crash_Percent
+
+
+
+
+#Traffic Device Functioning
+TCDNF_score_df<-PLCD%>%
+  filter(Traffic_Control_Device_Functioning == "No, device not functioning")%>%
+  group_by(County_Name,Crash_Year)%>%
+  summarise(TCDNF_Number_of_Crashes =n())
+
+
+colnames(TCDNF_score_df)[colnames(TCDNF_score_df)=="County_Name"] <- "County"
+colnames(TCDNF_score_df)[colnames(TCDNF_score_df)=="Crash_Year"] <- "Year"
+TCDNF_Crash_Percentage_Vs_Pop <- inner_join(County_Pop,TCDNF_score_df)
+
+TCDNF_Crash_Percentage_Vs_Pop$Crash_Percentage<-TCDNF_Crash_Percentage_Vs_Pop$TCDNF_Number_of_Crashes/TCDNF_Crash_Percentage_Vs_Pop$Population
+
+TCDNF_County_Crash_Percentage <-
+  TCDNF_Crash_Percentage_Vs_Pop %>%
+  group_by(County) %>%
+  summarise(Crash_Percentage = mean(Crash_Percentage))
+
+
+#median(County_Crash_Percentage$Crash_Percentage)
+
+#Add the mean
+TCDNF_County_Crash_Percentage$Mean_Crash_Percent <- mean(TCDNF_County_Crash_Percentage$Crash_Percentage)
+
+TCDNF_County_Crash_Percentage$TCDNF_Crash_Score <- TCDNF_County_Crash_Percentage$Crash_Percentage/TCDNF_County_Crash_Percentage$Mean_Crash_Percent
+
+###########################################
+#Protective System Used
+unique(PLCD$Protective_System_Used)
+
+PSU_score_df<-PLCD%>%
+  filter(Protective_System_Used == "None used - vehicle occupant")%>%
+  group_by(County_Name,Crash_Year)%>%
+  summarise(PSU_Number_of_Crashes =n())
+
+
+colnames(PSU_score_df)[colnames(PSU_score_df)=="County_Name"] <- "County"
+colnames(PSU_score_df)[colnames(PSU_score_df)=="Crash_Year"] <- "Year"
+PSU_Crash_Percentage_Vs_Pop <- inner_join(County_Pop,PSU_score_df)
+
+PSU_Crash_Percentage_Vs_Pop$Crash_Percentage<-PSU_Crash_Percentage_Vs_Pop$PSU_Number_of_Crashes/PSU_Crash_Percentage_Vs_Pop$Population
+
+PSU_County_Crash_Percentage <-
+  PSU_Crash_Percentage_Vs_Pop %>%
+  group_by(County) %>%
+  summarise(Crash_Percentage = mean(Crash_Percentage))
+
+
+#median(County_Crash_Percentage$Crash_Percentage)
+
+#Add the mean
+PSU_County_Crash_Percentage$Mean_Crash_Percent <- mean(PSU_County_Crash_Percentage$Crash_Percentage)
+
+PSU_County_Crash_Percentage$PSU_Crash_Score <- PSU_County_Crash_Percentage$Crash_Percentage/PSU_County_Crash_Percentage$Mean_Crash_Percent
+
+
+
+
+#Alcohol Suspected
+unique(PLCD$Alcohol_Suspected)
+
+AS_score_df<-PLCD%>%
+  filter(Alcohol_Suspected == "Yes, alcohol used")%>%
+  group_by(County_Name,Crash_Year)%>%
+  summarise(AS_Number_of_Crashes =n())
+
+
+colnames(AS_score_df)[colnames(AS_score_df)=="County_Name"] <- "County"
+colnames(AS_score_df)[colnames(AS_score_df)=="Crash_Year"] <- "Year"
+AS_Crash_Percentage_Vs_Pop <- inner_join(County_Pop,AS_score_df)
+
+AS_Crash_Percentage_Vs_Pop$Crash_Percentage<-AS_Crash_Percentage_Vs_Pop$AS_Number_of_Crashes/AS_Crash_Percentage_Vs_Pop$Population
+
+AS_County_Crash_Percentage <-
+  AS_Crash_Percentage_Vs_Pop %>%
+  group_by(County) %>%
+  summarise(Crash_Percentage = mean(Crash_Percentage))
+
+#Add the mean
+AS_County_Crash_Percentage$Mean_Crash_Percent <- mean(AS_County_Crash_Percentage$Crash_Percentage)
+
+AS_County_Crash_Percentage$AS_Crash_Score <- AS_County_Crash_Percentage$Crash_Percentage/AS_County_Crash_Percentage$Mean_Crash_Percent
+
+
+
+#Drugs Suspected
+
+unique(PLCD$Drugs_Suspected)
+
+DS_score_df<-PLCD%>%
+  filter(Drugs_Suspected == "Yes, drug used")%>%
+  group_by(County_Name,Crash_Year)%>%
+  summarise(DS_Number_of_Crashes =n())
+
+
+colnames(DS_score_df)[colnames(DS_score_df)=="County_Name"] <- "County"
+colnames(DS_score_df)[colnames(DS_score_df)=="Crash_Year"] <- "Year"
+DS_Crash_Percentage_Vs_Pop <- inner_join(County_Pop,DS_score_df)
+
+#checking PLCD for NA in Crash_Year
+PLCD%>%
+  filter(is.na(Crash_Year))
+
+DS_Crash_Percentage_Vs_Pop$Crash_Percentage<-DS_Crash_Percentage_Vs_Pop$DS_Number_of_Crashes/DS_Crash_Percentage_Vs_Pop$Population
+
+DS_County_Crash_Percentage <-
+  DS_Crash_Percentage_Vs_Pop %>%
+  group_by(County) %>%
+  summarise(Crash_Percentage = mean(Crash_Percentage))
+
+
+#median(County_Crash_Percentage$Crash_Percentage)
+
+#Add the mean
+DS_County_Crash_Percentage$Mean_Crash_Percent <- mean(DS_County_Crash_Percentage$Crash_Percentage)
+
+DS_County_Crash_Percentage$DS_Crash_Score <- DS_County_Crash_Percentage$Crash_Percentage/DS_County_Crash_Percentage$Mean_Crash_Percent
+```
+
+
+
+
+Combine Scores and create Heat Map
+```{r}
+County_Scores<-as.data.frame(cbind(County_Crash_Percentage$County
+                                   ,County_Crash_Percentage$Total_Crash_Score
+                                   ,TCDNF_County_Crash_Percentage$TCDNF_Crash_Score
+                                   ,PSU_County_Crash_Percentage$PSU_Crash_Score
+                                   ,AS_County_Crash_Percentage$AS_Crash_Score
+                                   ,DS_County_Crash_Percentage$DS_Crash_Score)
+                             )
+
+colnames(County_Scores)[colnames(County_Scores)=="V1"] <- "County"
+colnames(County_Scores)[colnames(County_Scores)=="V2"] <- "Total_Crash_Score"
+colnames(County_Scores)[colnames(County_Scores)=="V3"] <- "Malfunctioning_Traffic_Device"
+colnames(County_Scores)[colnames(County_Scores)=="V4"] <- "Protective_System_Used"
+colnames(County_Scores)[colnames(County_Scores)=="V5"] <- "Alcohol_Suspected"
+colnames(County_Scores)[colnames(County_Scores)=="V6"] <- "Drugs_Suspected"
+
+
+County_Scores$Total_Crash_Score<-round(as.numeric(as.character(County_Scores$Total_Crash_Score)),digits=2)
+County_Scores$Malfunctioning_Traffic_Device<-round(as.numeric(as.character(County_Scores$Malfunctioning_Traffic_Device)),digits=2)
+County_Scores$Protective_System_Used<-round(as.numeric(as.character(County_Scores$Protective_System_Used)),digits=2)
+County_Scores$Alcohol_Suspected<-round(as.numeric(as.character(County_Scores$Alcohol_Suspected)),digits=2)
+County_Scores$Drugs_Suspected<-round(as.numeric(as.character(County_Scores$Drugs_Suspected)),digits=2)
+
+
+County_Scores <- as.data.frame(gather(County_Scores, key = "Score_Type", value = "Score" ,  2:6))
+County_Scores$Score_Type<- str_replace_all(County_Scores$Score_Type,"_"," ")
+
+#write.csv(County_Scores,"Data/County_Scores.csv")
+
+```
+
+
+Time series
+```{r}
+df<-PLCD
+PLCD$Crash_Date_YMD<- ymd(substr(PLCD$Crash_Date,1,10))
+#months(PLCD$Crash_Date_YMD)
+df$Crash_Month<-months(df$Crash_Date_YMD)
+#df$Crash_Date_YM<- format(PLCD$Crash_Date_YMD,"%Y %B")
+df$Crash_Date_YrMonth<- format(PLCD$Crash_Date_YMD,"%Y-%m")
+#df$Crash_Year<-format(as.Date(df$Crash_Date_YMD, format="%Y-%m-%d"),"%Y")
+
+#df$Crash_Year<- format(df$Crash_Date_YM, "%Y ")
+
+df2 <- dplyr::summarise(group_by(df,df$Crash_Date_YrMonth,df$Road_Surface_Condition, df$Crash_Year,df$Crash_Month), count = n())
+colnames(df2)[colnames(df2)=="df$Crash_Date_YrMonth"] <- "Crash_Year_Month"
+colnames(df2)[colnames(df2)=="df$Road_Surface_Condition"] <- "Road_Surface_Condition"
+colnames(df2)[colnames(df2)=="df$Crash_Year"] <- "Crash_Year"
+colnames(df2)[colnames(df2)=="df$Crash_Month"] <- "Crash_Month"
+
+df2 <- df2[!is.na(df2$Road_Surface_Condition), ]
+df2 <- df2[(df2$Road_Surface_Condition == "Dry" | df2$Road_Surface_Condition == "Ice" |df2$Road_Surface_Condition == "Slush" | df2$Road_Surface_Condition == "Snow" | df2$Road_Surface_Condition == "Wet"), ]
+df2 <- df2[!is.na(df2$Crash_Year_Month), ]
+
+#typeof(df2$Crash_Year_Month)
+
+
+TimeSeries<-ggplot(df2, aes(df2$Crash_Year_Month,df2$count)) + 
+geom_line(aes(color=df2$Road_Surface_Condition, group=df2$Road_Surface_Condition ) )+
+   geom_point(aes(color=df2$Road_Surface_Condition, group=df2$Road_Surface_Condition))+
+xlab(label="Year and Month of Crash")+
+ylab(label="Number Of Crashes")+
+scale_color_discrete(name = "Road Surface Condition")+
+ggtitle("Time Series of Road Surface condition During Crash")+
+guides(fill=guide_legend("Road Surface Condition"))+
+theme(text=element_text(family="Arial"), plot.title = element_text(face="bold",size=16),
+     legend.title = element_text( size=10, face="bold"),
+     legend.text = element_text( size=8),
+     axis.title.x = element_text(face="bold",size=10), axis.title.y = element_text(face="bold",size=10),
+     axis.text.x = element_text(size=8), axis.text.y = element_text(size=8))+
+     theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggsave("Images/TimeSeries.jpeg", 
+ plot = TimeSeries, 
+ width = 12, height = 8, 
+ units = "in",
+ dpi = 600)
+
+```
+
