@@ -4,8 +4,6 @@ author: "Thejaswini Anupindi & Shriram Karthikeyan"
 date: "November 8, 2019"
 output:
   output: rmarkdown::github_document
-    df_print: paged
-  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
